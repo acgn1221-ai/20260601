@@ -16,6 +16,7 @@ let size = 15; // 網格大小，加大以提升流暢度
 let handPose;
 let video;
 let hands = [];
+let isVideoAvailable = false; // 新增：追蹤攝影機是否可用
 let isModelLoaded = false; // 檢查 AI 是否載入成功
 let waterCount = 0;
 
@@ -31,14 +32,17 @@ function setup() {
   createCanvas(640, 480);
   
   // 初始化攝影機
-  video = createCapture(VIDEO, { flipped: true });
+  video = createCapture(VIDEO, { flipped: true }, (stream) => {
+    if (stream) {
+      isVideoAvailable = true;
+      // 攝影機成功啟動後，才開啟 AI 偵測
+      handPose.detectStart(video, (results) => {
+        hands = results;
+      });
+    }
+  });
   video.size(640, 480);
   video.hide();
-  
-  // 啟動 AI 偵測
-  handPose.detectStart(video, (results) => {
-    hands = results;
-  });
   
   // 初始化網格系統
   cols = floor(width / size);
@@ -77,11 +81,13 @@ function setup() {
 function draw() {
   background(0);
   
-  // 1. 畫出視訊畫面
-  image(video, 0, 0, width, height);
+  // 1. 畫出視訊畫面 (僅在可用時繪製)
+  if (isVideoAvailable) {
+    image(video, 0, 0, width, height);
+  }
   
   // 2. 互動觸發：手勢或滑鼠
-  if (hands && hands.length > 0) {
+  if (isVideoAvailable && hands && hands.length > 0) {
     let hand = hands[0];
     if (hand.keypoints && hand.keypoints[8]) {
       let indexFinger = hand.keypoints[8];
@@ -190,6 +196,10 @@ function drawUI() {
   } else {
     fill(255, 165, 0);
     text("○ AI 載入中... (此時可用滑鼠測試)", 15, 45);
+  }
+  if (!isVideoAvailable) {
+    fill(255, 50, 50);
+    text("❌ 找不到攝影機 (請檢查硬體或權限)", 15, 65);
   }
 }
 
