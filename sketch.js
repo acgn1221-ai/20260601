@@ -1,25 +1,35 @@
 /*
 ----- 《引流解謎遊戲：拯救小魚》視覺細化高質感版 ----- 
-核心：全面美化水流、岩石與魚缸視覺，擺脫粗糙像素感！
 */
 
 let grid = [];
-let cols, rows;
-let size = 12; // 稍微縮小格子，讓水流與地形更細膩
+let cols = 50;
+let rows = 40;
+let size; 
 
+let currentLevel = 1;
 let waterCount = 0;
-let winTarget = 200; 
-let gameWon = false;
+let winTarget = 100; 
+let levelWon = false;
+let nextBtn;
 
 function setup() {
-  createCanvas(windowWidth, windowHeight);
-  initGameLayout();
+  // 固定畫布大小
+  createCanvas(640, 480);
+  size = width / cols;
+  
+  // 建立切換關卡按鈕
+  nextBtn = createButton('切換下一關');
+  nextBtn.position(10, 80);
+  nextBtn.mousePressed(goToNextLevel);
+
+  initLevel(currentLevel);
 }
 
-function initGameLayout() {
-  cols = floor(width / size);
-  rows = floor(height / size);
-
+function initLevel(level) {
+  waterCount = 0;
+  levelWon = false;
+  
   for (let i = 0; i < cols; i++) {
     grid[i] = [];
     for (let j = 0; j < rows; j++) {
@@ -27,76 +37,80 @@ function initGameLayout() {
     }
   }
 
-  // 建造岩石斜坡擋板 (狀態 2) ── 相對位置自適應
-  // 左側斜坡擋板
-  for (let i = 0; i < cols * 0.48; i++) {
-    let j = floor(rows * 0.35 + i * 0.35);
-    if (j < rows) {
-      grid[i][j] = 2;
-      if (j + 1 < rows) grid[i][j + 1] = 2; // 增加擋板厚度
-      if (j + 2 < rows) grid[i][j + 2] = 2; 
+  if (level === 1) {
+    // Level 1 (左右漏斗)
+    for (let x = 0; x <= 22; x++) {
+      let y = floor(12 + x * 0.6);
+      setBlock(x, y, 2);
     }
-  }
-
-  // 右側斜坡擋板
-  for (let i = floor(cols * 0.52); i < cols; i++) {
-    let j = floor(rows * 0.72 - (i - cols * 0.52) * 0.35);
-    if (j < rows) {
-      grid[i][j] = 2;
-      if (j + 1 < rows) grid[i][j + 1] = 2;
-      if (j + 2 < rows) grid[i][j + 2] = 2;
+    for (let x = 28; x <= 49; x++) {
+      let y = floor(25 - (x - 28) * 0.6);
+      setBlock(x, y, 2);
     }
+    setArea(38, 33, 48, 39, 3);
+  } 
+  else if (level === 2) {
+    // Level 2 (交錯擋板)
+    for (let x = 15; x <= 49; x++) {
+      setBlock(x, 12, 2);
+    }
+    for (let x = 0; x <= 30; x++) {
+      let y = floor(20 + x * 0.3);
+      setBlock(x, y, 2);
+    }
+    setArea(2, 33, 12, 39, 3);
+  } 
+  else if (level === 3) {
+    // Level 3 (極限峽谷)
+    setArea(0, 20, 18, 35, 2);
+    setArea(32, 20, 49, 35, 2);
+    setArea(20, 33, 30, 39, 3);
   }
+}
 
-  // 右下角玻璃魚缸 (狀態 3)
-  let tankW = floor(width * 0.22 / size); 
-  let tankH = floor(height * 0.2 / size); 
-  tankW = max(8, tankW);
-  tankH = max(6, tankH);
+function setBlock(x, y, type) {
+  if (x >= 0 && x < cols && y >= 0 && y < rows) grid[x][y] = type;
+}
 
-  for (let i = cols - tankW; i < cols; i++) {
-    for (let j = rows - tankH; j < rows; j++) {
-      grid[i][j] = 3;
+function setArea(x1, y1, x2, y2, type) {
+  for (let i = x1; i <= x2; i++) {
+    for (let j = y1; j <= y2; j++) {
+      setBlock(i, j, type);
     }
   }
 }
 
+function goToNextLevel() {
+  currentLevel = (currentLevel % 3) + 1;
+  initLevel(currentLevel);
+}
+
 function draw() {
-  // 深邃的宇宙星空藍背景
   background(15, 20, 30); 
 
-  // 1. 互動觸發：支援手機觸控與滑鼠
-  if (touchIsPressed || mouseIsPressed) {
-    // 一次注入一小團水，增加水流豐富度
-    for(let d = -1; d <= 1; d++) {
-      addWater(mouseX + d*size, mouseY);
-    }
-  }
-  if (touches.length > 0) {
-    for (let i = 0; i < touches.length; i++) {
-      addWater(touches[i].x, touches[i].y);
-    }
+  // 1. 互動處理 (Y < 120 降雨)
+  if ((mouseIsPressed || touches.length > 0) && mouseY < 120) {
+    addWater(mouseX, mouseY);
   }
 
   // 2. 物理演算
-  if (!gameWon) {
+  if (!levelWon) {
     updatePhysics();
   }
 
-  // 3. 繪製精細化物件
+  // 3. 繪製
   drawGameObjects();
-
-  // 4. 顯示高質感 UI 與新手引導
   drawUI();
 }
 
 function addWater(mx, my) {
   let x = floor(mx / size);
   let y = floor(my / size);
-  if (x >= 0 && x < cols && y >= 0 && y < rows) {
-    if (grid[x][y] === 0) {
-      // 給水滴一個動態的時間戳記，用來做發光漸層
-      grid[x][y] = 1; 
+  for (let i = 0; i < 2; i++) {
+    for (let j = 0; j < 2; j++) {
+      if (grid[x + i] && grid[x + i][y + j] === 0) {
+        grid[x + i][y + j] = 1;
+      }
     }
   }
 }
@@ -106,35 +120,34 @@ function updatePhysics() {
   for (let i = 0; i < cols; i++) {
     nextGrid[i] = [];
     for (let j = 0; j < rows; j++) {
-      nextGrid[i][j] = (grid[i][j] === 2 || grid[i][j] === 3) ? grid[i][j] : 0;
+      let state = grid[i][j];
+      nextGrid[i][j] = (state === 2 || state === 3) ? state : 0;
     }
   }
 
   for (let i = 0; i < cols; i++) {
     for (let j = rows - 1; j >= 0; j--) {
-      let state = grid[i][j];
-      if (state === 1) {
+      if (grid[i][j] === 1) {
         if (j + 1 < rows) {
           let below = grid[i][j + 1];
           if (below === 3) { 
             waterCount++;
-            if (waterCount >= winTarget) gameWon = true;
+            if (waterCount >= winTarget) levelWon = true;
             continue; 
           }
-          let dir = random() < 0.5 ? 1 : -1;
-          let belowDiag = 0;
-          if (i + dir >= 0 && i + dir < cols) {
-            belowDiag = grid[i + dir][j + 1];
-          }
-          if (below === 0) {
+          
+          if (below === 0 && nextGrid[i][j+1] === 0) {
             nextGrid[i][j + 1] = 1;
-          } else if (belowDiag === 0 && i + dir >= 0 && i + dir < cols) {
-            nextGrid[i + dir][j + 1] = 1;
           } else {
-            nextGrid[i][j] = 1;
+            let dir = random() < 0.5 ? 1 : -1;
+            if (i + dir >= 0 && i + dir < cols && grid[i + dir][j + 1] === 0 && nextGrid[i + dir][j + 1] === 0) {
+              nextGrid[i + dir][j + 1] = 1;
+            } else if (i - dir >= 0 && i - dir < cols && grid[i - dir][j + 1] === 0 && nextGrid[i - dir][j + 1] === 0) {
+              nextGrid[i - dir][j + 1] = 1;
+            } else {
+              nextGrid[i][j] = 1;
+            }
           }
-        } else {
-          nextGrid[i][j] = 0; 
         }
       }
     }
@@ -143,145 +156,93 @@ function updatePhysics() {
 }
 
 function drawGameObjects() {
-  // 啟用色彩 HSB 模式來畫發光水流，畫完再切回 RGB
-  colorMode(HSB, 360, 100, 100, 100);
-  
   for (let i = 0; i < cols; i++) {
     for (let j = 0; j < rows; j++) {
+      let state = grid[i][j];
+      let x = i * size;
+      let y = j * size;
       
-      if (grid[i][j] === 1) { // 💧 螢光霓虹水流
+      if (state === 1) {
         noStroke();
-        // 讓水流顏色隨時間微幅波動 (藍色到青色之間)
-        let hue = 190 + sin(frameCount * 0.02 + i) * 15; 
-        fill(hue, 85, 95, 80); 
-        ellipse(i * size + size / 2, j * size + size / 2, size * 1.1); // 稍微放大消除縫隙
-        
-      } else if (grid[i][j] === 2) { // ⛰️ 浮雕感岩石斜坡
-        colorMode(RGB);
+        fill(50, 150, 255); 
+        rect(x, y, size, size);
+      } 
+      else if (state === 2) {
         noStroke();
-        // 根據高低差給予岩石深淺漸層，製造立體陰影感
-        let shadow = map(j, 0, rows, 90, 50);
-        fill(shadow, shadow + 10, shadow + 20); 
-        rect(i * size, j * size, size, size);
-        // 加上岩石上緣的亮線外框
-        stroke(shadow + 40, shadow + 50, shadow + 60);
-        line(i * size, j * size, (i+1) * size, j * size);
-        colorMode(HSB, 360, 100, 100, 100);
-        
-      } else if (grid[i][j] === 3) { // 🧪 科技感半透明水底魚缸
-        colorMode(RGB);
+        fill(60);
+        rect(x, y, size, size);
+        stroke(120); 
+        line(x, y, x + size, y);
+      } 
+      else if (state === 3) {
         noStroke();
-        fill(0, 180, 216, 30); // 極淡的科技發光藍
-        rect(i * size, j * size, size, size);
-        colorMode(HSB, 360, 100, 100, 100);
+        fill(0, 200, 255, 30);
+        rect(x, y, size, size);
       }
     }
   }
-  colorMode(RGB); // 切回標準色彩模式
-  
-  // 繪製魚缸的實體玻璃外框與動態水面波浪
   drawTankDecorations();
 }
 
 function drawTankDecorations() {
-  // 尋找魚缸的左邊界與上邊界座標
-  let tankLeft = width;
-  let tankTop = height;
+  let tankL = width, tankT = height, tankR = 0, tankB = 0;
+  let hasTank = false;
   for (let i = 0; i < cols; i++) {
     for (let j = 0; j < rows; j++) {
       if (grid[i][j] === 3) {
-        if (i * size < tankLeft) tankLeft = i * size;
-        if (j * size < tankTop) tankTop = j * size;
+        tankL = min(tankL, i * size);
+        tankT = min(tankT, j * size);
+        tankR = max(tankR, (i + 1) * size);
+        tankB = max(tankB, (j + 1) * size);
+        hasTank = true;
       }
     }
   }
   
-  // 畫出霓虹發光的魚缸外框
-  noFill();
-  stroke(0, 180, 216);
-  strokeWeight(3);
-  rect(tankLeft, tankTop, width - tankLeft, height - tankTop, 8);
-  
-  // 裝飾性標籤
-  noStroke();
-  fill(0, 180, 216, 150);
-  rect(tankLeft + 10, tankTop - 20, 60, 20, 4);
-  fill(255);
-  textSize(11);
-  textAlign(CENTER, CENTER);
-  text("TARGET", tankLeft + 40, tankTop - 10);
-
-  // 🐟 動態游動的小魚
-  let fishX = tankLeft + (width - tankLeft) / 2 + cos(frameCount * 0.03) * 15;
-  let fishY = tankTop + (height - tankTop) / 2 + sin(frameCount * 0.05) * 8;
-  textSize(36);
-  text('🐟', fishX, fishY);
+  if (hasTank) {
+    noFill();
+    stroke(0, 255, 255, 150 + sin(frameCount * 0.1) * 50); 
+    strokeWeight(2);
+    rect(tankL, tankT, tankR - tankL, tankB - tankT, 5);
+    
+    let fx = (tankL + tankR) / 2;
+    let fy = (tankT + tankB) / 2 + sin(frameCount * 0.05) * 5;
+    textSize(32);
+    textAlign(CENTER, CENTER);
+    text('🐟', fx, fy);
+  }
 }
 
 function drawUI() {
-  // 頂部半透明現代感計分板
   noStroke();
-  fill(20, 25, 35, 200);
-  rect(20, 20, 280, 50, 10);
-  stroke(255, 255, 255, 30);
-  strokeWeight(1);
-  noFill();
-  rect(20, 20, 280, 50, 10);
-  
-  // 計分文字
   fill(255);
-  noStroke();
-  textSize(16);
-  textAlign(LEFT, CENTER);
-  text("💧 小魚喝水量: ", 40, 45);
+  textSize(22);
+  textAlign(LEFT, TOP);
+  text(`Level ${currentLevel}`, 15, 15);
   
-  // 動態跳動的分數數字
-  fill(0, 180, 216);
-  textSize(20);
-  text(waterCount + " / " + winTarget, 150, 44);
+  fill(0, 200, 255);
+  textSize(18);
+  text(`目標水量: ${waterCount} / ${winTarget}`, 15, 45);
 
-  // 新手特效引導（當水為 0 時）
-  if (waterCount === 0) {
+  let currentWater = 0;
+  for(let i=0; i<cols; i++) for(let j=0; j<rows; j++) if(grid[i][j]===1) currentWater++;
+
+  if (currentWater === 0 && waterCount === 0) {
     fill(255, 255, 0);
-    textSize(18);
     textAlign(CENTER, CENTER);
-    text("👇 請在螢幕上方「左右抹動」降下水源！", width / 2, height * 0.15);
-    
-    // 動態指引發光箭頭
-    stroke(0, 180, 216, 100 + sin(frameCount * 0.1) * 50);
-    strokeWeight(4);
-    let arrowY = height * 0.2 + sin(frameCount * 0.08) * 10;
-    line(width / 2, arrowY, width / 2, arrowY + 20);
-    line(width / 2, arrowY + 20, width / 2 - 8, arrowY + 12);
-    line(width / 2, arrowY + 20, width / 2 + 8, arrowY + 12);
+    text("👇 請在畫面最上方塗抹降雨！", width / 2, height / 2);
+    stroke(255, 255, 0, 50);
+    line(0, 120, width, 120);
   }
 
-  // 勝利大畫面
-  if (gameWon) {
-    fill(10, 15, 25, 230);
+  if (levelWon) {
+    fill(0, 0, 0, 180);
     rect(0, 0, width, height);
-    
-    // 閃爍的獲勝文字
-    fill(0, 255, 150);
-    textSize(46);
+    fill(255, 215, 0);
+    textSize(50);
     textAlign(CENTER, CENTER);
-    text("🎉 MISSION COMPLETE!", width / 2, height / 2 - 30);
-    
-    fill(255);
-    textSize(20);
-    text("你成功引導水源，拯救了瀕臨缺水的小魚！", width / 2, height / 2 + 25);
+    text(`🎉 LEVEL ${currentLevel} CLEAR!`, width / 2, height / 2);
   }
 }
 
-function windowResized() {
-  resizeCanvas(windowWidth, windowHeight);
-  initGameLayout();
-}
-
-function touchMoved() {
-  return false;
-}
-
-function touchEnded() {
-  return false;
-}
+function touchMoved() { return false; }
