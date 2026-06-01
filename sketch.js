@@ -17,6 +17,7 @@ let handPose;
 let video;
 let hands = [];
 let isVideoAvailable = false; // 新增：追蹤攝影機是否可用
+let cameraErrorMessage = ""; // 新增：儲存報錯訊息
 let isModelLoaded = false; // 檢查 AI 是否載入成功
 let waterCount = 0;
 
@@ -32,17 +33,43 @@ function setup() {
   createCanvas(640, 480);
   
   // 初始化攝影機
-  video = createCapture(VIDEO, { flipped: true }, (stream) => {
-    if (stream) {
-      isVideoAvailable = true;
-      // 攝影機成功啟動後，才開啟 AI 偵測
-      handPose.detectStart(video, (results) => {
-        hands = results;
+  initCamera();
+  
+  // 封裝攝影機啟動邏輯，增加多鏡頭支援與防呆
+  async function initCamera() {
+    try {
+      // 1. 先列出所有媒體設備
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoDevices = devices.filter(device => device.kind === 'videoinput');
+
+      if (videoDevices.length === 0) {
+        throw new Error("找不到任何攝影機鏡頭");
+      }
+
+      // 2. 設定約束條件：強迫選取第一個找到的設備 (通常是內建或第一台實體)
+      let constraints = {
+        video: {
+          deviceId: videoDevices[0].deviceId,
+          width: 640,
+          height: 480
+        },
+        audio: false
+      };
+
+      // 3. 使用 p5 的 createCapture
+      video = createCapture(constraints, (stream) => {
+        if (stream) {
+          isVideoAvailable = true;
+          video.hide();
+          handPose.detectStart(video, (results) => { hands = results; });
+        }
       });
+    } catch (err) {
+      console.error("相機初始化失敗: ", err);
+      isVideoAvailable = false;
+      cameraErrorMessage = err.message;
     }
-  });
-  video.size(640, 480);
-  video.hide();
+  }
   
   // 初始化網格系統
   cols = floor(width / size);
@@ -197,9 +224,13 @@ function drawUI() {
     fill(255, 165, 0);
     text("○ AI 載入中... (此時可用滑鼠測試)", 15, 45);
   }
+
+  // 相機錯誤防呆提醒
   if (!isVideoAvailable) {
     fill(255, 50, 50);
-    text("❌ 找不到攝影機 (請檢查硬體或權限)", 15, 65);
+    rect(0, 65, 260, 40);
+    fill(255);
+    text("⚠️ 相機模式失效\n已切換至【滑鼠模式】", 15, 70);
   }
 }
 
